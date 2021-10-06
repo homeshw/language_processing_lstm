@@ -70,6 +70,8 @@ def convertNetOutput(ratingOutput, categoryOutput):
     rating, and 0, 1, 2, 3, or 4 for the business category.  If your network
     outputs a different representation convert the output here.
     """
+	ratingOutputPred = ratingOutput.argmax(dim=1, keepdim=True)
+	categoryOutputPred = categoryOutput.argmax(dim=1, keepdim=True)
 
     return ratingOutput, categoryOutput
 
@@ -86,11 +88,57 @@ class network(tnn.Module):
     should return an output for both the rating and the business category.
     """
 
-    def __init__(self):
+    def __init__(self,num_input,num_hid,num_out):
         super(network, self).__init__()
+		self.num_hid = num_hid
+        self.batch_size = batch_size
+        self.num_layers = num_layers
+        self.W = tnn.Parameter(torch.Tensor(num_input, num_hid * 4))
+        self.U = tnn.Parameter(torch.Tensor(num_hid, num_hid * 4))
+        self.hid_bias = tnn.Parameter(torch.Tensor(num_hid * 4))
+        self.V = tnn.Parameter(torch.Tensor(num_hid, num_out))
+        self.out_bias = tnn.Parameter(torch.Tensor(num_out))
+        self.init_weights()
+		
+	def init_weights(self):
+        stdv = 1.0 / math.sqrt(self.num_hid)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv, stdv)
+
+    def init_hidden(self):
+        return(torch.zeros(self.num_layers, self.batch_size, self.num_hid),
+               torch.zeros(self.num_layers, self.batch_size, self.num_hid))
 
     def forward(self, input, length):
-        pass
+        """Assumes x is of shape (batch, sequence, feature)"""
+        batch_size, seq_size, _ = x.size()
+        hidden_seq = []
+        if init_states is None:
+            h_t, c_t = (torch.zeros(batch_size,self.num_hid).to(x.device), 
+                        torch.zeros(batch_size,self.num_hid).to(x.device))
+        else:
+            h_t, c_t = init_states
+         
+        NH = self.num_hid
+        for t in range(seq_size):
+            x_t = x[:, t, :]
+            # batch the computations into a single matrix multiplication
+            gates = x_t @ self.W + h_t @ self.U + self.hid_bias
+            i_t, f_t, g_t, o_t = (
+                torch.sigmoid(gates[:, :NH]),     # input gate
+                torch.sigmoid(gates[:, NH:NH*2]), # forget gate
+                torch.tanh(gates[:, NH*2:NH*3]),  # new values
+                torch.sigmoid(gates[:, NH*3:]),   # output gate
+            )
+            c_t = f_t * c_t + i_t * g_t
+            h_t = o_t * torch.tanh(c_t)
+            hidden_seq.append(h_t.unsqueeze(0))
+        hidden_seq = torch.cat(hidden_seq, dim=0)
+        # reshape from (sequence, batch, feature)
+        #           to (batch, sequence, feature)
+        hidden_seq = hidden_seq.transpose(0,1).contiguous()
+        output = hidden_seq @ self.V + self.out_bias
+        return output
 
 class loss(tnn.Module):
     """
@@ -100,9 +148,13 @@ class loss(tnn.Module):
 
     def __init__(self):
         super(loss, self).__init__()
+		self.loss_function = tnn.functional.nll_loss
 
     def forward(self, ratingOutput, categoryOutput, ratingTarget, categoryTarget):
-        pass
+        log_prob_rating  = tnn.log_softmax(ratingOutput, dim=1)
+		
+		log_prob_category = tnn.log_softmax(categoryOutput, dim=1)
+        loss = loss_function(log_prob.squeeze(), label.squeeze())
 
 net = network()
 lossFunc = loss()
