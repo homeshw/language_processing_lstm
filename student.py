@@ -19,10 +19,11 @@ You may change this variable in the config.py file.
 You may only use GloVe 6B word vectors as found in the torchtext package.
 """
 
-# import torch
+import torch
 import torch.nn as tnn
 import torch.optim as toptim
 from torchtext.vocab import GloVe
+import torch.nn.functional as F
 # import numpy as np
 # import sklearn
 
@@ -88,17 +89,20 @@ class network(tnn.Module):
     should return an output for both the rating and the business category.
     """
 
-    def __init__(self,num_input,num_hid,num_out):
+    def __init__(self):
         super(network, self).__init__()
-		self.num_hid = num_hid
-        self.batch_size = batch_size
-        self.num_layers = num_layers
+		self.batch_size = 32
+		self.num_input = 100 # fix
+		self.num_hid = 7
+		self.num_out = 6
+		self.num_layers = 1
         self.W = tnn.Parameter(torch.Tensor(num_input, num_hid * 4))
         self.U = tnn.Parameter(torch.Tensor(num_hid, num_hid * 4))
         self.hid_bias = tnn.Parameter(torch.Tensor(num_hid * 4))
         self.V = tnn.Parameter(torch.Tensor(num_hid, num_out))
         self.out_bias = tnn.Parameter(torch.Tensor(num_out))
         self.init_weights()
+		self.init_hidden() #check
 		
 	def init_weights(self):
         stdv = 1.0 / math.sqrt(self.num_hid)
@@ -138,7 +142,9 @@ class network(tnn.Module):
         #           to (batch, sequence, feature)
         hidden_seq = hidden_seq.transpose(0,1).contiguous()
         output = hidden_seq @ self.V + self.out_bias
-        return output
+		ratingOutput = output[0]
+		categoryOutput = output[1:6]
+        return ratingOutput,categoryOutput
 
 class loss(tnn.Module):
     """
@@ -148,13 +154,20 @@ class loss(tnn.Module):
 
     def __init__(self):
         super(loss, self).__init__()
-		self.loss_function = tnn.functional.nll_loss
+		self.loss_function_binary = F.BCELoss
+		self.loss_function_multi = F.nll_loss
+		
 
     def forward(self, ratingOutput, categoryOutput, ratingTarget, categoryTarget):
-        log_prob_rating  = tnn.log_softmax(ratingOutput, dim=1)
+        prob_rating  = F.sigmoid(ratingOutput)		
+		log_prob_category = F.log_softmax(categoryOutput, dim=1)
 		
-		log_prob_category = tnn.log_softmax(categoryOutput, dim=1)
-        loss = loss_function(log_prob.squeeze(), label.squeeze())
+		loss_rating = loss_function(prob_rating.squeeze(), ratingTarget.squeeze())
+        loss_category = loss_function(log_prob_category.squeeze(), categoryTarget.squeeze())
+		
+		total_loss = loss_rating + loss_category
+		
+		return total_loss
 
 net = network()
 lossFunc = loss()

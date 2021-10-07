@@ -1,2 +1,3 @@
-.vector_cache
-_pycache_
+/.vector_cache
+
+/__pycache__
