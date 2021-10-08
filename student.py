@@ -24,6 +24,7 @@ import torch.nn as tnn
 import torch.optim as toptim
 from torchtext.vocab import GloVe
 import torch.nn.functional as F
+import math
 # import numpy as np
 # import sklearn
 
@@ -71,8 +72,11 @@ def convertNetOutput(ratingOutput, categoryOutput):
     rating, and 0, 1, 2, 3, or 4 for the business category.  If your network
     outputs a different representation convert the output here.
     """
-	ratingOutputPred = ratingOutput.argmax(dim=1, keepdim=True)
-	categoryOutputPred = categoryOutput.argmax(dim=1, keepdim=True)
+    # fix. Find better way if possible
+    ratingOutputPred = torch.round(ratingOutput)
+
+    # convert to 0-5
+    categoryOutputPred = categoryOutput.argmax(dim=1, keepdim=True)
 
     return ratingOutput, categoryOutput
 
@@ -91,20 +95,20 @@ class network(tnn.Module):
 
     def __init__(self):
         super(network, self).__init__()
-		self.batch_size = 32
-		self.num_input = 100 # fix
-		self.num_hid = 7
-		self.num_out = 6
-		self.num_layers = 1
-        self.W = tnn.Parameter(torch.Tensor(num_input, num_hid * 4))
-        self.U = tnn.Parameter(torch.Tensor(num_hid, num_hid * 4))
-        self.hid_bias = tnn.Parameter(torch.Tensor(num_hid * 4))
-        self.V = tnn.Parameter(torch.Tensor(num_hid, num_out))
+        self.batch_size = 32
+        num_input = 50 # fix
+        self.num_hid = 7
+        num_out = 6
+        self.num_layers = 1
+        self.W = tnn.Parameter(torch.Tensor(num_input, self.num_hid * 4))
+        self.U = tnn.Parameter(torch.Tensor(self.num_hid, self.num_hid * 4))
+        self.hid_bias = tnn.Parameter(torch.Tensor(self.num_hid * 4))
+        self.V = tnn.Parameter(torch.Tensor(self.num_hid, num_out))
         self.out_bias = tnn.Parameter(torch.Tensor(num_out))
         self.init_weights()
-		self.init_hidden() #check
+        self.init_hidden() #check
 		
-	def init_weights(self):
+    def init_weights(self):
         stdv = 1.0 / math.sqrt(self.num_hid)
         for weight in self.parameters():
             weight.data.uniform_(-stdv, stdv)
@@ -115,17 +119,18 @@ class network(tnn.Module):
 
     def forward(self, input, length):
         """Assumes x is of shape (batch, sequence, feature)"""
-        batch_size, seq_size, _ = x.size()
+        init_states = None
+        batch_size, seq_size, _ = input.size()
         hidden_seq = []
         if init_states is None:
-            h_t, c_t = (torch.zeros(batch_size,self.num_hid).to(x.device), 
-                        torch.zeros(batch_size,self.num_hid).to(x.device))
+            h_t, c_t = (torch.zeros(batch_size,self.num_hid).to(input.device), 
+                        torch.zeros(batch_size,self.num_hid).to(input.device))
         else:
             h_t, c_t = init_states
          
         NH = self.num_hid
         for t in range(seq_size):
-            x_t = x[:, t, :]
+            x_t = input[:, t, :]
             # batch the computations into a single matrix multiplication
             gates = x_t @ self.W + h_t @ self.U + self.hid_bias
             i_t, f_t, g_t, o_t = (
@@ -142,8 +147,8 @@ class network(tnn.Module):
         #           to (batch, sequence, feature)
         hidden_seq = hidden_seq.transpose(0,1).contiguous()
         output = hidden_seq @ self.V + self.out_bias
-		ratingOutput = output[0]
-		categoryOutput = output[1:6]
+        ratingOutput = output[:,:,0]
+        categoryOutput = output[:,:,1:6]
         return ratingOutput,categoryOutput
 
 class loss(tnn.Module):
@@ -154,20 +159,25 @@ class loss(tnn.Module):
 
     def __init__(self):
         super(loss, self).__init__()
-		self.loss_function_binary = F.BCELoss
-		self.loss_function_multi = F.nll_loss
+        self.loss_function_binary = F.binary_cross_entropy
+        self.loss_function_multi = F.nll_loss
 		
 
     def forward(self, ratingOutput, categoryOutput, ratingTarget, categoryTarget):
+
+        # convert categoryTarget into one-hot encoding
+        one_hot_categoryTarget = F.one_hot(categoryTarget)
+
         prob_rating  = F.sigmoid(ratingOutput)		
-		log_prob_category = F.log_softmax(categoryOutput, dim=1)
+        #log_prob_category = F.log_softmax(categoryOutput, dim=1)
+        prob_category = F.softmax(categoryOutput)
 		
-		loss_rating = loss_function(prob_rating.squeeze(), ratingTarget.squeeze())
-        loss_category = loss_function(log_prob_category.squeeze(), categoryTarget.squeeze())
+        loss_rating = self.loss_function_binary(prob_rating.squeeze(), ratingTarget.squeeze())
+        loss_category = self.loss_function_multi(prob_category.squeeze(), one_hot_categoryTarget.squeeze())
 		
-		total_loss = loss_rating + loss_category
+        total_loss = loss_rating + loss_category
 		
-		return total_loss
+        return total_loss
 
 net = network()
 lossFunc = loss()

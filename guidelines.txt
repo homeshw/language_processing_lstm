@@ -1,0 +1,18 @@
+Allowed packages
+
+json
+math
+nltk*
+numpy
+os
+pandas
+random
+re
+sklearn
+spacy*
+string
+sys
+time
+torch
+torchtext
+unicodedata

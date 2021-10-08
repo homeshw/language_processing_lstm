@@ -8,7 +8,7 @@ DO NOT MODIFY THIS FILE
 """
 
 import torch
-from torchtext import data
+from torchtext.legacy import data
 
 from config import device
 import student
