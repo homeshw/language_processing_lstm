@@ -98,9 +98,9 @@ class network(tnn.Module):
         super(network, self).__init__()
         self.batch_size = 32
         num_input = 50 # fix
-        self.num_hid = 7
+        self.num_hid = 100
         num_out = 6
-        self.num_layers = 1
+        self.num_layers = 2
         self.W = tnn.Parameter(torch.Tensor(num_input, self.num_hid * 4))
         self.U = tnn.Parameter(torch.Tensor(self.num_hid, self.num_hid * 4))
         self.hid_bias = tnn.Parameter(torch.Tensor(self.num_hid * 4))
@@ -150,12 +150,19 @@ class network(tnn.Module):
         #           to (batch, sequence, feature)
         hidden_seq = hidden_seq.transpose(0,1).contiguous()
         output = hidden_seq @ self.V + self.out_bias
-        #with open('output.txt', 'w') as f:
-        #    f.write(str(output))
-        ratingOutput = F.sigmoid(output[:,-1,0])
-        categoryOutput = F.softmax(output[:,-1,1:6])
-        #categoryOutput = F.log_softmax(output[:,-1,1:6], dim=1)
-        return ratingOutput,categoryOutput
+        size = output.size()
+        I = size[0]
+        K = size[2]
+        fOutput = torch.zeros(I,K).to(input.device)
+        for i in range(I):
+            for k in range(K):
+                j = length[i]-1
+                fOutput[i][k] = output[i][j][k]
+        #print(fOutput)
+        ratingOutputA = F.sigmoid(fOutput[:,0])
+        #categoryOutputA = F.softmax(fOutput[:,1:6],dim=1)
+        categoryOutputA = F.log_softmax(fOutput[:,1:6],dim=1)
+        return ratingOutputA,categoryOutputA
 
 class loss(tnn.Module):
     """
@@ -172,7 +179,7 @@ class loss(tnn.Module):
     def forward(self, ratingOutput, categoryOutput, ratingTarget, categoryTarget):
 
         # convert categoryTarget into one-hot encoding
-        one_hot_categoryTarget = F.one_hot(categoryTarget)
+        #one_hot_categoryTarget = F.one_hot(categoryTarget)
 
         loss_rating = self.loss_function_binary(ratingOutput.squeeze(), ratingTarget.float().squeeze())
         loss_category = self.loss_function_multi(categoryOutput.squeeze(), categoryTarget.squeeze())
@@ -191,5 +198,6 @@ lossFunc = loss()
 trainValSplit = 0.8
 batchSize = 32
 #fix
-epochs = 1
-optimiser = toptim.SGD(net.parameters(), lr=0.01)
+epochs = 10
+#optimiser = toptim.SGD(net.parameters(), lr=0.05)
+optimiser = toptim.Adam(net.parameters(),lr=0.01)
