@@ -79,7 +79,7 @@ def convertNetOutput(ratingOutput, categoryOutput):
     # convert to 0-5
     categoryOutputPred = categoryOutput.argmax(dim=1, keepdim=True)
 
-    return ratingOutput, categoryOutputPred
+    return ratingOutputPred, categoryOutputPred
 
 ################################################################################
 ###################### The following determines the model ######################
@@ -155,8 +155,6 @@ class network(tnn.Module):
         ratingOutput = F.sigmoid(output[:,-1,0])
         categoryOutput = F.softmax(output[:,-1,1:6])
         #categoryOutput = F.log_softmax(output[:,-1,1:6], dim=1)
-        #categoryOutput = output[:,:,1:6]
-        #return ratingOutput,categoryOutput
         return ratingOutput,categoryOutput
 
 class loss(tnn.Module):
@@ -176,22 +174,8 @@ class loss(tnn.Module):
         # convert categoryTarget into one-hot encoding
         one_hot_categoryTarget = F.one_hot(categoryTarget)
 
-        #prob_rating  = F.sigmoid(ratingOutput)		
-        #log_prob_category = F.log_softmax(categoryOutput, dim=1)
-        #prob_category = F.softmax(categoryOutput)
-
-        #category_output_flatten = torch.flatten(categoryOutput,start_dim=0)
-        #category_target_flatten = torch.flatten(one_hot_categoryTarget,start_dim=0)
-        #category_output_flatten = categoryOutput.view(160)
-        #category_target_flatten = one_hot_categoryTarget.view(160)
-        #categoryOutput = torch.transpose(categoryOutput, 0, 1)
-        #one_hot_categoryTarget = torch.transpose(one_hot_categoryTarget, 0, 1)
-		
         loss_rating = self.loss_function_binary(ratingOutput.squeeze(), ratingTarget.float().squeeze())
         loss_category = self.loss_function_multi(categoryOutput.squeeze(), categoryTarget.squeeze())
-        #loss_category = self.loss_function_multi(category_output_flatten.squeeze(), category_target_flatten.squeeze())
-        #loss_category = self.loss_function_multi(categoryOutput.squeeze(), one_hot_categoryTarget.squeeze())
-        #loss_category = 0
 		
         total_loss = loss_rating + loss_category
 		

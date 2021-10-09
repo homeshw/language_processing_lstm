@@ -13,4 +13,4 @@ import torch
 # Use a GPU if available, as it should be faster.
 #fix
 #device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cuda:0')
+device = torch.device('cuda')
