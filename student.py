@@ -98,7 +98,7 @@ class network(tnn.Module):
         super(network, self).__init__()
         self.batch_size = 32
         num_input = 50 # fix
-        self.num_hid = 100
+        self.num_hid = 200
         num_out = 6
         self.num_layers = 2
         self.W = tnn.Parameter(torch.Tensor(num_input, self.num_hid * 4))
@@ -195,9 +195,9 @@ lossFunc = loss()
 ################## The following determines training options ###################
 ################################################################################
 
-trainValSplit = 0.8
+trainValSplit = 0.7
 batchSize = 32
 #fix
 epochs = 10
-#optimiser = toptim.SGD(net.parameters(), lr=0.05)
-optimiser = toptim.Adam(net.parameters(),lr=0.01)
+#optimiser = toptim.SGD(net.parameters(), lr=0.01)
+optimiser = toptim.Adam(net.parameters(),lr=0.001)
